@@ -1,22 +1,28 @@
 require('./models/db')
+require("express-async-errors")
+const error = require("./middleware/error")
 const express = require('express')
+const cors = require('cors')
 const bodyParser = require('body-parser')
+const cookieParser = require('cookie-parser')
 const port = process.env.PORT || 8080
-const register = require("./controller/register")
+const user = require("./controller/register")
+const record = require("./controller/user")
 const course = require("./controller/course")
-const student = require("./controller/student")
-const userAction = require("./controller/userAction")
-const record = require("./controller/record")
 const app = express();
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({extended:true}))
 app.use(express.json())
-app.use('/api/user/',register)
-app.use('/api/user/course/',course)
-app.use('/api/user/student/',student)
-app.use('/api/user/useraction/',userAction)
-app.use('/api/user/',record)
+app.use(cors({
+    origin:['http://localhost:3000'], 
+    credentials:true,           
+}));
+app.use(cookieParser())
+app.use('/api/user',user)
+app.use('/api/user/data',record)
+app.use('/api/user/course',course)
 
+app.use(error)
 
 
 app.get("/",(req,res)=>{

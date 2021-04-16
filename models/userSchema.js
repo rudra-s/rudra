@@ -14,6 +14,9 @@ const userSchema = new mongoose.Schema({
         maxlength:140,
         unique:true
     },
+    photo:{
+       type:String
+    },
     password:{
         type:String,
         required:true
@@ -31,51 +34,23 @@ const userSchema = new mongoose.Schema({
         required:true,
         unique:true
     },
-    address:[{
-        state:{
-            type:String,
-            required:true
-        },
-        code:{
-            type:Number,
-            required:true
-        }
+    roles:{
+        type:String,
+        enum:['user','admin'],
+        default:'user',
+    },
+    course:[{
+        type:mongoose.Schema.Types.ObjectId,
+        ref:"Course"
     }],
-    isAdmin:{
-            type:Boolean,
-            required:true,
-            default:false
-        },
-        isSuperAdmin:{
-            type:Boolean,
-            required:true,
-            default:false
-        },
-        tokens:[{
-            token:{
-                type:String,
-                required:true
-            }
-        }],
-        course:[{
-            type:mongoose.Schema.Types.ObjectId,
-            ref:"Course"
-        }],
-        record:[{
-            type:mongoose.Schema.Types.ObjectId,
-            ref:"Record"
-        }],
+    record:[{
+        type:mongoose.Schema.Types.ObjectId,
+        ref:"Record"
+    }],
     created_at:{
         type:Date,
         default:Date.now()
     }
 })
-
-userSchema.methods.authTokenJwt = async function(){
-    const token = await jwt.sign({_id:this._id},process.env.accessTokenKey)
-    this.tokens = this.tokens.concat({token})
-    await this.save()
-    return token
-}
 
 module.exports = mongoose.model("User" , userSchema)

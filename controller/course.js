@@ -1,105 +1,110 @@
-const express = require("express")
-const mongoose = require("mongoose")
+const express = require('express')
 const Course = require("../models/courseSchema")
-const {check,validationResult} = require('express-validator')
+const User = require("../models/userSchema")
+const valid = require("../middleware/validId")
 const auth = require("../middleware/auth")
 const admin = require("../middleware/admin")
-const superAdmin = require("../middleware/superAdmin")
-const router = express()
+const {check , validationResult} = require('express-validator')
+const router = express.Router()
 
 router.get("/allcourse",auth,async(req,res)=>{
     try {
-        const course = await Course.find({}).sort('cname')
-        res.status(200).json(course)
+     let course = await Course.find().select('-user -__v ')
+     res.status(200).json(course)
     } catch (error) {
-        res.status(422).json(error)
-    } 
+        res.status(422).json({message:error.message})
+    }
 })
 
 router.get("/:_id",auth,async(req,res)=>{
     try {
-        var valid = mongoose.Types.ObjectId.isValid(req.params._id)
-        if(valid){
-        const course = await Course.findById(req.params._id)
-        if(course){
-            res.status(202).json(course)
-        } else{
-            res.status(404).json("Course not found or Id may be incorrect !")
-        }
-     } else{
-         res.status(400).json("Opps ! try with a valid Id")
-     } 
+     let course = await Course.findById({_id:req.params._id}).select('-user -__v ')
+     res.status(200).json(course)
     } catch (error) {
-        res.status(422).json(error)
+        res.status(422).json({message:error.message})
     }
 })
 
-router.post("/",[
-    check("cname","Provide a course name").isString().isLength({min:3,max:20}),
-    check("cdepartment","Provide a department name").isString().isLength({min:4,max:20})
-], [auth,superAdmin],async(req,res)=>{
-    if(Object.keys(req.body).length!==2) return res.status(500).json("Opps ! There should be two field")
+router.post("/post",[
+    check("cname").isString().isLength({min:3,max:15}),
+    check("cdepartment").isString().isLength({min:3,max:15})
+],[auth,admin], async(req,res)=>{
     const error = validationResult(req)
-    if(!error.isEmpty()) return res.status(422).json({error})
-    const course = await Course.findOne({cname:req.body.cname})
+    if(!error.isEmpty()) return res.status(422).json({message:error.message})
+    let course = await Course.findOne({cname:req.body.cname})
     if(course){
-        res.status(422).json("Course is allready created !")
+        res.status(422).json('Allready Exists')
     } else{
-        try {
-            const course = new Course({
-                cname:req.body.cname,
-                cdepartment:req.body.cdepartment
-            })
-            await course.save()
-            res.status(201).json("Course created successfully .")
-        } catch (error) {
-            res.status(422).json({error})
-        }
+      try {
+        let course = new Course({
+            cname:req.body.cname,
+            cdepartment:req.body.cdepartment
+        })
+        await course.save()
+        res.status(201).json(course) 
+      } catch (error) {
+          res.status(422).json({message:error.message})
+      }
     }
-
 })
 
-router.put("/:_id",[
-    check("cname","Provide a course name").isString().isLength({min:3,max:20}),
-    check("cdepartment","Provide a department name").isString().isLength({min:4,max:20})
-], [auth,superAdmin],async(req,res)=>{
-    if(Object.keys(req.body).length!==2) return res.status(500).json("Opps ! There should be two field")
-    const error = validationResult(req)
-    if(!error.isEmpty()){
-     res.status(422).json({error})
-    } else{
-        try {
-            const valid = mongoose.Types.ObjectId.isValid(req.params._id)
-            if(!valid) return res.status(400).json("Invalid course Id")
-
-            const course = await Course.findByIdAndUpdate({_id:req.params._id},{
-                cname:req.body.cname,
-                cdepartment:req.body.cdepartment
-            },{new:true})
-            await course.save()
-            res.status(201).json("Course updated successfully .")
-        } catch (error) {
-            res.status(422).json({error:"check your course Id"})
-        }
-    }
-
-})
-
-router.delete("/remove/:_id",[auth,superAdmin],async(req,res)=>{
+router.put("/put/:_id",[auth,valid],async(req,res)=>{
     try {
-        var valid = mongoose.Types.ObjectId.isValid(req.params._id)
-        if(valid){
-        const course = await Course.findByIdAndDelete(req.params._id)
-        if(course){
-            res.status(202).json("Course deleted successfully !")
-        } else{
-            res.status(404).json("This course is not found or maybe Id is incorrect !")
-        }
-    } else{
-        res.json("Opps ! try with valid Id")
-    }
+        const users = await User.findById({_id:req.user._id})
+            let course=users.course.includes(req.params._id)
+            if(course) return res.status(400).json('already taken')
+            else
+            {
+                users.course.push(req.params._id)
+                await users.save() 
+                res.status(200).json(users) 
+            }
+
     } catch (error) {
-        res.status(422).json({error:error})
+        res.status(422).json({message:error.message})
+    }
+  
+})
+
+router.put("/pop/:_id",[auth,valid],async(req,res)=>{
+    try {
+        let user = await User.findById({_id:req.user._id})
+        let course = user.course.includes(req.params._id)
+        if(!course) return res.status(404).json('course not found')
+        else{
+            user.course.pop(req.params._id)
+            await user.save()
+            res.status(200).json(user)
+        }
+    } catch (error) {
+        res.status(422).json({message:error.message})
     }
 })
-module.exports = router
+
+router.get("/get/:_id",[auth], async(req,res)=>{
+   try {
+    let user = await User.findById(req.params._id).populate('course').select('-roles -created_at -password -cpassword -record')
+    if(user){
+        res.status(200).json(user)
+    } else{
+        res.status(400).json('Not found')
+    }
+   } catch (error) {
+       res.status.json({message:error.message})
+   }
+})
+
+router.delete("/remove/:_id",[valid,auth,admin],async(req,res)=>{
+    try {
+       let course = await Course.findByIdAndDelete({_id:req.params._id})
+       if(course){
+           res.status(200).json('course deleted !')
+       } else{
+           res.status(400).json('course not found')
+       }
+    } catch (error) {
+        res.json({message:error.message})
+    }
+   })
+
+module.exports = router;
